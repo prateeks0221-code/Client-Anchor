@@ -1,0 +1,91 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  email         String
+  name          String?
+  createdAt     DateTime  @default(now())
+  searches      SearchQuery[]
+  templates     EmailTemplate[]
+}
+
+model SearchQuery {
+  id            String    @id @default(cuid())
+  userId        String
+  user          Account   @relation(fields: [userId], references: [id])
+  prompt        String    @db.Text
+  intent        String?   // business | job | partnership
+  filters       Json      // {geo, budgetMin, budgetMax, workType, radius, industries}
+  status        String    @default("pending")
+  resultCount   Int       @default(0)
+  avgScore      Float     @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  results       Result[]
+}
+
+model Result {
+  id            String    @id @default(cuid())
+  searchId      String
+  search        SearchQuery @relation(fields: [searchId], references: [id], onDelete: Cascade)
+  name          String
+  type          String    // business | person | job | corporation
+  description   String?   @db.Text
+  website       String?
+  email         String?
+  phone         String?
+  address       String?
+  city          String?
+  country       String?
+  matchScore    Int       @default(0)
+  matchReason   String?   @db.Text
+  source        String
+  sourceUrl     String?
+  contacts      Contact[]
+  rawData       Json?
+  enriched      Boolean   @default(false)
+  archived      Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  refreshedAt   DateTime  @default(now())
+}
+
+model Contact {
+  id            String    @id @default(cuid())
+  resultId      String
+  result        Result    @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  name          String
+  title         String?
+  email         String?
+  linkedin      String?
+  isPrimary     Boolean   @default(false)
+}
+
+model EmailTemplate {
+  id            String    @id @default(cuid())
+  userId        String
+  user          Account   @relation(fields: [userId], references: [id])
+  name          String
+  subject       String
+  body          String    @db.Text
+  approachType  String    // direct | pas | partnership
+  variables     String[]
+  createdAt     DateTime  @default(now())
+}
+
+model OutreachEvent {
+  id            String    @id @default(cuid())
+  resultId      String
+  templateId    String
+  subject       String
+  body          String    @db.Text
+  status        String    @default("draft") // draft | sent | opened | replied | bounced
+  sentAt        DateTime?
+  createdAt     DateTime  @default(now())
+}

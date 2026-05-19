@@ -1,24 +1,22 @@
 import { prisma } from './prisma'
 import * as cheerio from 'cheerio'
+import {
+  isValidEmailFormat,
+  isBlocklistedDomain,
+  extractDomain,
+  validateAndScoreEmails,
+  pickTopEmails,
+  isGmail,
+} from './email-validator'
 
 const EMAIL_RE = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
 const PHONE_RE = /(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g
 
-const EMAIL_BLOCKLIST = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.css', '.js']
-const EMAIL_DOMAIN_BLOCKLIST = ['example.com', 'sentry.io', 'w3.org', 'schema.org', 'google.com', 'cloudflare.com']
-
-function cleanEmails(raw: string[]): string[] {
-  return [...new Set(
-    raw.filter(e =>
-      !EMAIL_BLOCKLIST.some(ext => e.endsWith(ext)) &&
-      !EMAIL_DOMAIN_BLOCKLIST.some(d => e.endsWith(d)) &&
-      e.includes('@') && e.includes('.')
-    )
-  )]
-}
-
-/** Scrape a URL — extracts emails from mailto: links (precise) + text regex fallback + phones. */
-async function scrapeContactsFromUrl(url: string): Promise<{ emails: string[]; phones: string[] }> {
+/** Scrape URL — extract emails with source tracking + phones */
+async function scrapeContactsFromUrl(url: string): Promise<{
+  emails: Array<{ email: string; source: 'json_ld' | 'mailto' | 'regex' }>
+  phones: string[]
+}> {
   try {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 8000)
@@ -31,33 +29,55 @@ async function scrapeContactsFromUrl(url: string): Promise<{ emails: string[]; p
 
     const html = await res.text()
     const $ = cheerio.load(html)
+    const body = $('body').text()
 
-    // Priority 1: explicit mailto: links — highest precision
-    const mailtoEmails: string[] = []
-    $('a[href^="mailto:"]').each((_, el) => {
-      const raw = $(el).attr('href')?.replace(/^mailto:/i, '').split('?')[0].trim() || ''
-      if (raw && raw.includes('@')) mailtoEmails.push(raw.toLowerCase())
-    })
-
-    // Priority 2: text regex — catches obfuscated emails not in links
-    const text = $('body').text()
-    const textEmails = (text.match(EMAIL_RE) || []).map(e => e.toLowerCase())
-
-    // Priority 3: data attributes / JSON-LD
+    // ── Tier 1: JSON-LD structured data (highest trust) ──
     const jsonLdEmails: string[] = []
     $('script[type="application/ld+json"]').each((_, el) => {
       try {
         const obj = JSON.parse($(el).html() || '{}')
-        const email = obj.email || obj.contactPoint?.email
-        if (email && typeof email === 'string') jsonLdEmails.push(email.toLowerCase())
-      } catch { /* ignore */ }
+        const email = obj.email || obj.contactPoint?.email || obj.contact_point?.email
+        if (email && typeof email === 'string' && isValidEmailFormat(email)) {
+          jsonLdEmails.push(email.toLowerCase())
+        }
+      } catch {
+        /* ignore parse errors */
+      }
     })
 
-    const emails = cleanEmails([...jsonLdEmails, ...mailtoEmails, ...textEmails])
-    const phones = [...new Set(text.match(PHONE_RE) || [])]
+    // ── Tier 2: mailto: href links (explicit contact intent) ──
+    const mailtoEmails: string[] = []
+    $('a[href^="mailto:"]').each((_, el) => {
+      const raw = $(el).attr('href')?.replace(/^mailto:/i, '').split('?')[0].trim() || ''
+      if (isValidEmailFormat(raw)) mailtoEmails.push(raw.toLowerCase())
+    })
 
-    return { emails, phones }
-  } catch {
+    // ── Tier 3: Regex text scan (lowest trust) ──
+    const regexEmails: string[] = []
+    const matches = body.match(EMAIL_RE) || []
+    for (const m of matches) {
+      const email = m.toLowerCase()
+      if (
+        isValidEmailFormat(email) &&
+        !isBlocklistedDomain(extractDomain(email) || '')
+      ) {
+        regexEmails.push(email)
+      }
+    }
+
+    // Collect with source metadata
+    const emailsWithSource = [
+      ...jsonLdEmails.map((email) => ({ email, source: 'json_ld' as const })),
+      ...mailtoEmails.map((email) => ({ email, source: 'mailto' as const })),
+      ...regexEmails.map((email) => ({ email, source: 'regex' as const })),
+    ]
+
+    // Extract phones
+    const phones = [...new Set(body.match(PHONE_RE) || [])]
+
+    return { emails: emailsWithSource, phones }
+  } catch (err) {
+    console.warn('[Enricher] Scrape error:', err instanceof Error ? err.message : String(err))
     return { emails: [], phones: [] }
   }
 }
@@ -104,7 +124,12 @@ export async function enrichResult(resultId: string) {
 
   let email = result.email
   let phone = result.phone
-  const newContacts: Array<{
+
+  // Accumulate ALL emails across all sources — scored + deduped at end
+  const allEmails: Array<{ email: string; source: 'json_ld' | 'mailto' | 'hunter' | 'regex' }> = []
+
+  // Named contacts from Hunter (we keep metadata separate)
+  const hunterContacts: Array<{
     name: string
     title?: string
     email?: string
@@ -125,19 +150,20 @@ export async function enrichResult(resultId: string) {
       const emails: any[] = data.data?.emails || []
 
       for (const e of emails.slice(0, 3)) {
+        if (e.value) allEmails.push({ email: e.value, source: 'hunter' })
+
         const fullName =
           e.first_name && e.last_name
             ? `${e.first_name} ${e.last_name}`.trim()
             : e.first_name || e.last_name || 'Contact'
 
-        newContacts.push({
+        hunterContacts.push({
           name: fullName,
           title: e.position || undefined,
-          email: e.value,
+          email: e.value || undefined,
           linkedin: e.linkedin || undefined,
-          isPrimary: !email,
+          isPrimary: false,
         })
-        if (!email) email = e.value
       }
     } catch (e) {
       console.warn('[Enricher] Hunter.io failed:', (e as Error).message)
@@ -147,34 +173,64 @@ export async function enrichResult(resultId: string) {
   // ── 2. Scrape website ───────────────────────────────────────────────────────
   if (result.website) {
     try {
-      // Scrape homepage
+      // Homepage
       const { emails: homeEmails, phones: homePhones } = await scrapeContactsFromUrl(result.website)
-      if (!email && homeEmails[0]) email = homeEmails[0]
+      allEmails.push(...homeEmails)
       if (!phone && homePhones[0]) phone = homePhones[0]
 
-      // Scrape /contact, /about, /team sub-pages
+      // Sub-pages: /contact, /about, /team
       const subPages = await findContactPages(result.website)
       for (const pageUrl of subPages) {
         const { emails: subEmails, phones: subPhones } = await scrapeContactsFromUrl(pageUrl)
-        if (!email && subEmails[0]) email = subEmails[0]
+        allEmails.push(...subEmails)
         if (!phone && subPhones[0]) phone = subPhones[0]
-
-        // Add any new unique emails as contacts (no name, scraped)
-        for (const e of subEmails.slice(0, 2)) {
-          const alreadyHave =
-            newContacts.some((c) => c.email === e) ||
-            result.contacts.some((c) => c.email === e)
-          if (!alreadyHave) {
-            newContacts.push({ name: 'Contact (scraped)', email: e, isPrimary: false })
-          }
-        }
       }
     } catch (e) {
       console.warn('[Enricher] Scrape failed:', (e as Error).message)
     }
   }
 
-  // ── 3. Persist ──────────────────────────────────────────────────────────────
+  // ── 3. Score + dedupe — Gmail gets priority ─────────────────────────────────
+  const scored = validateAndScoreEmails(allEmails)
+  const topEmails = pickTopEmails(scored, 3)
+
+  console.log(
+    `[Enricher] ${resultId}: ${allEmails.length} raw → ${scored.length} unique → top: [${topEmails.join(', ')}]`
+  )
+
+  // Primary email = highest confidence (Gmail wins ties via pickTopEmails)
+  if (!email && topEmails[0]) email = topEmails[0]
+
+  // ── 4. Build contacts list ──────────────────────────────────────────────────
+  const newContacts: Array<{
+    name: string
+    title?: string
+    email?: string
+    linkedin?: string
+    isPrimary: boolean
+  }> = []
+
+  // Hunter contacts carry real names/titles — add them
+  for (const c of hunterContacts) {
+    newContacts.push({ ...c, isPrimary: c.email === email })
+  }
+
+  // Remaining top emails not already covered by Hunter contacts
+  for (const e of topEmails) {
+    const inHunter = hunterContacts.some((c) => c.email === e)
+    const inExisting = result.contacts.some((c) => c.email === e)
+    if (!inHunter && !inExisting) {
+      const scoreEntry = scored.find((s) => s.email === e)
+      const sourceName = scoreEntry?.source ?? 'scraped'
+      newContacts.push({
+        name: `Contact (${sourceName})`,
+        email: e,
+        isPrimary: e === email,
+      })
+    }
+  }
+
+  // ── 5. Persist ──────────────────────────────────────────────────────────────
   await prisma.result.update({
     where: { id: resultId },
     data: {

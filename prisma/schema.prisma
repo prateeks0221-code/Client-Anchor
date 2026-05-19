@@ -74,8 +74,10 @@ model EmailTemplate {
   name          String
   subject       String
   body          String    @db.Text
-  approachType  String    // direct | pas | partnership
+  approachType  String    // pas | partnership | job | custom
   variables     String[]
+  isWinner      Boolean   @default(false)  // archived winning template
+  winCount      Int       @default(0)
   createdAt     DateTime  @default(now())
 }
 
@@ -83,9 +85,49 @@ model OutreachEvent {
   id            String    @id @default(cuid())
   resultId      String
   templateId    String
+  segment       String    @default("pas")  // pas | partnership | job | custom
+  variantIndex  Int       @default(0)      // 0=A, 1=B, 2=C
+  toEmails      String[]                   // multi-recipient log
   subject       String
   body          String    @db.Text
-  status        String    @default("draft") // draft | sent | opened | replied | bounced
+  status        String    @default("draft") // draft | sent | opened | replied | bounced | meeting_booked
+  sentiment     String?                    // interested | neutral | rejection | meeting_booked
   sentAt        DateTime?
+  followUpSentAt DateTime?
   createdAt     DateTime  @default(now())
+}
+
+// Cached company intelligence — avoid re-scraping same domain
+model CompanyMemory {
+  id            String    @id @default(cuid())
+  domain        String    @unique
+  companyName   String
+  industry      String?
+  techStack     String?
+  recentNews    String?   @db.Text
+  hiringStatus  String?
+  fundingStage  String?
+  rawFacts      String?   @db.Text  // free-form facts injected into AI prompt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Per-user sender profile (static signature / SMTP config)
+model SenderProfile {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  fullName      String
+  title         String?
+  phone         String?
+  linkedinUrl   String?
+  calendarUrl   String?   // Calendly etc
+  senderCompany String?
+  signatureHtml String?   @db.Text
+  smtpHost      String?
+  smtpPort      Int?
+  smtpUser      String?
+  smtpPassEnc   String?   // encrypted; server-side only
+  fromAlias     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

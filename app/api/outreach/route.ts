@@ -10,9 +10,12 @@ const FROM = process.env.RESEND_FROM_EMAIL || 'ClientAnchor <onboarding@resend.d
 interface OutreachPayload {
   resultId: string
   toEmail: string
+  toEmails?: string[]     // multi-recipient (primary + extras)
   subject: string
   body: string            // rendered (vars substituted)
-  approachType: string    // 'direct' | 'pas' | 'partnership'
+  approachType: string    // 'pas' | 'partnership' | 'job' | 'custom'
+  segment?: string        // alias for approachType
+  variantIndex?: number   // 0=A, 1=B, 2=C
   templateName: string
 }
 
@@ -24,7 +27,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { resultId, toEmail, subject, body, approachType, templateName } = payload
+  const { resultId, toEmail, toEmails, subject, body, approachType, segment, variantIndex, templateName } = payload
 
   if (!resultId || !toEmail || !subject || !body) {
     return NextResponse.json({ error: 'Missing required fields: resultId, toEmail, subject, body' }, { status: 422 })
@@ -36,11 +39,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Result not found' }, { status: 404 })
   }
 
+  // Collect all recipients (deduped)
+  const allRecipients = [...new Set([toEmail, ...(toEmails ?? [])].filter(Boolean))]
+
   // Save as draft first
   const event = await prisma.outreachEvent.create({
     data: {
       resultId,
-      templateId: approachType || 'direct',
+      templateId: approachType || segment || 'pas',
+      segment: segment || approachType || 'pas',
+      variantIndex: variantIndex ?? 0,
+      toEmails: allRecipients,
       subject,
       body,
       status: 'draft',
@@ -51,10 +60,9 @@ export async function POST(req: NextRequest) {
   try {
     const { data, error } = await resend.emails.send({
       from: FROM,
-      to: [toEmail],
+      to: allRecipients,
       subject,
-      text: body,    // plain-text; upgrade to html later if needed
-      // html: `<pre style="font-family:sans-serif;white-space:pre-wrap">${body}</pre>`,
+      text: body,
     })
 
     if (error) throw new Error(error.message)

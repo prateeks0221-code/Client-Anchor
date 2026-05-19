@@ -1,53 +1,98 @@
 export interface EmailTemplate {
   name: string
-  approachType: 'direct' | 'pas' | 'partnership'
+  approachType: 'pas' | 'partnership' | 'job' | 'custom'
+  segment: 1 | 2 | 3 | 4
+  description: string  // shown in segment selector
+  toneLabel: string    // e.g. "Diagnostic & Urgent"
+  defaultTemperature: number  // 0.3–0.7
   subject: string
   body: string
   variables: string[]
+  closingHook: string  // shown as tooltip
 }
 
 export const DEFAULT_TEMPLATES: EmailTemplate[] = [
   {
-    name: 'Direct Value',
-    approachType: 'direct',
-    subject: 'Quick win for {{company}} — {{value_prop}}',
-    body: `Hi {{first_name}},
-
-I noticed {{company}} is {{company_activity}}. We help {{target_profile}} {{benefit}}.
-
-Worth a brief chat?
-
-Best,
-{{my_name}}`,
-    variables: ['company', 'first_name', 'company_activity', 'target_profile', 'benefit', 'my_name', 'value_prop'],
-  },
-  {
-    name: 'Problem-Agitation-Solution',
+    name: 'PAS — Direct Value',
     approachType: 'pas',
+    segment: 1,
+    description: 'Identify pain → validate severity → present remedy',
+    toneLabel: 'Diagnostic & Urgent',
+    defaultTemperature: 0.4,
+    closingHook: "Here's exactly how {{company}} eliminates this in {{timeframe}}",
     subject: '{{pain_point}} at {{company}}?',
     body: `Hi {{first_name}},
 
-Most {{industry}} companies struggle with {{pain_point}}. It usually costs them {{cost_of_inaction}}.
+Most {{industry}} companies struggle with {{pain_point}}. Left unaddressed, it costs them {{cost_of_inaction}}.
 
-We solved this for {{similar_company}} and {{result}}.
+We fixed this for {{similar_company}} — {{result}}.
 
-Open to seeing how it applies to {{company}}?
+Here's exactly how {{company}} eliminates this in {{timeframe}}.
+
+Worth 15 minutes?
 
 {{my_name}}`,
-    variables: ['company', 'first_name', 'industry', 'pain_point', 'cost_of_inaction', 'similar_company', 'result', 'my_name'],
+    variables: ['company', 'first_name', 'industry', 'pain_point', 'cost_of_inaction', 'similar_company', 'result', 'timeframe', 'my_name'],
   },
   {
     name: 'Partnership',
     approachType: 'partnership',
+    segment: 2,
+    description: 'Shared audience overlap → joint value proposition',
+    toneLabel: 'Collaborative & Strategic',
+    defaultTemperature: 0.5,
+    closingHook: 'A {{company}}–{{my_company}} integration would unlock {{metric}} for both sides',
     subject: 'Partnership idea: {{company}} × {{my_company}}',
     body: `Hi {{first_name}},
 
-{{company}} and {{my_company}} serve similar audiences. I see a natural collaboration around {{collaboration_area}}.
+{{company}} and {{my_company}} serve overlapping audiences in {{collaboration_area}}.
 
-Worth exploring?
+A {{company}}–{{my_company}} integration would unlock {{metric}} for both sides — I have a concrete idea on what this could look like.
+
+Open to a quick call this week?
 
 {{my_name}}`,
-    variables: ['company', 'first_name', 'my_company', 'collaboration_area', 'my_name'],
+    variables: ['company', 'first_name', 'my_company', 'collaboration_area', 'metric', 'my_name'],
+  },
+  {
+    name: 'Job Interest',
+    approachType: 'job',
+    segment: 3,
+    description: 'Research-backed admiration → skill fit → contribution proposal',
+    toneLabel: 'Aspirational & Value-Aligned',
+    defaultTemperature: 0.6,
+    closingHook: "I'd like to explore how my {{expertise}} could accelerate {{company}}'s {{initiative}}",
+    subject: "Excited about {{company}}'s work in {{initiative}}",
+    body: `Hi {{first_name}},
+
+I've been following {{company}}'s push into {{initiative}} — {{specific_admiration}}.
+
+My background in {{expertise}} maps directly to what you're building. I'd like to explore how I could accelerate {{company}}'s {{initiative}}.
+
+Is there room for a conversation?
+
+{{my_name}}`,
+    variables: ['company', 'first_name', 'initiative', 'specific_admiration', 'expertise', 'my_name'],
+  },
+  {
+    name: 'Custom',
+    approachType: 'custom',
+    segment: 4,
+    description: 'User-defined segment — write your own structure',
+    toneLabel: 'Custom',
+    defaultTemperature: 0.5,
+    closingHook: 'Define your own closing hook',
+    subject: '{{subject_line}}',
+    body: `Hi {{first_name}},
+
+{{opening}}
+
+{{body_paragraph}}
+
+{{closing}}
+
+{{my_name}}`,
+    variables: ['subject_line', 'first_name', 'opening', 'body_paragraph', 'closing', 'my_name'],
   },
 ]
 

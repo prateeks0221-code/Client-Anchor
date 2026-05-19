@@ -31,7 +31,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DashboardContact, DashboardResult } from "@/types";
-import { OutreachPanel } from "@/components/OutreachPanel";
+import { OutreachEngine } from "@/components/OutreachEngine";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -582,7 +582,7 @@ export function ResultDetail({ result, onClose }: Props) {
     <>
       {createPortal(modal, document.body)}
       {outreachOpen && (
-        <OutreachPanel
+        <OutreachEngine
           result={{ ...result, contacts: liveContacts }}
           onClose={() => setOutreachOpen(false)}
         />

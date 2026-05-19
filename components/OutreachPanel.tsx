@@ -28,16 +28,20 @@ import { DashboardResult } from "@/types";
 
 // ── Template tab config ───────────────────────────────────────────────────────
 
-const TAB_ICONS = {
-  direct: <Zap className="w-3.5 h-3.5" />,
-  pas: <TrendingUp className="w-3.5 h-3.5" />,
+const TAB_ICONS: Record<string, React.ReactNode> = {
+  direct:      <Zap      className="w-3.5 h-3.5" />,
+  pas:         <TrendingUp className="w-3.5 h-3.5" />,
   partnership: <Handshake className="w-3.5 h-3.5" />,
+  job:         <Zap      className="w-3.5 h-3.5" />,
+  custom:      <Zap      className="w-3.5 h-3.5" />,
 };
 
-const TAB_COLORS = {
-  direct: "text-sky-400 border-sky-500/40 bg-sky-500/10",
-  pas: "text-amber-400 border-amber-500/40 bg-amber-500/10",
+const TAB_COLORS: Record<string, string> = {
+  direct:      "text-sky-400 border-sky-500/40 bg-sky-500/10",
+  pas:         "text-amber-400 border-amber-500/40 bg-amber-500/10",
   partnership: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10",
+  job:         "text-violet-400 border-violet-500/40 bg-violet-500/10",
+  custom:      "text-slate-400 border-slate-500/40 bg-slate-500/10",
 };
 
 // ── Variable field label ──────────────────────────────────────────────────────

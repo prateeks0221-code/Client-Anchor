@@ -41,7 +41,8 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma schema — needed for `prisma migrate deploy`
+# Prisma config + schema — needed for `prisma migrate deploy`
+COPY --from=builder --chown=nextjs:nodejs /app/prisma.config.ts ./prisma.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 # Full node_modules from builder — Prisma 7 CLI has a deep transitive dep tree

@@ -27,6 +27,10 @@ import {
   Building2,
   Thermometer,
   Shuffle,
+  Paperclip,
+  Upload,
+  FileText,
+  Trash2,
 } from "lucide-react";
 import { DEFAULT_TEMPLATES, EmailTemplate, renderTemplate, extractVars } from "@/lib/email-templates";
 import { DashboardResult } from "@/types";
@@ -118,6 +122,23 @@ function saveProfile(p: SenderProfile) {
   localStorage.setItem("outreach_sender_profile", JSON.stringify(p));
 }
 
+// ── Doc types ─────────────────────────────────────────────────────────────────
+
+interface OutreachDoc {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  path: string;
+  createdAt: string;
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // ── Variant type ──────────────────────────────────────────────────────────────
 
 interface Variant {
@@ -163,9 +184,32 @@ export function OutreachEngine({ result, onClose }: Props) {
   const availableEmails = collectEmails(result);
   const [toEmail, setToEmail] = useState(availableEmails[0] ?? "");
   const [customEmail, setCustomEmail] = useState("");
-  const [extraRecipients, setExtraRecipients] = useState(""); // CSV
   const useCustom = toEmail === "__custom__";
   const effectiveTo = useCustom ? customEmail : toEmail;
+
+  // ── CC ──
+  const [ccSelected, setCcSelected] = useState<Set<string>>(new Set());
+  const [ccInput, setCcInput] = useState("");
+  const [ccManual, setCcManual] = useState<string[]>([]);
+
+  const toggleCc = (email: string) =>
+    setCcSelected((prev) => {
+      const s = new Set(prev);
+      if (s.has(email)) s.delete(email); else s.add(email);
+      return s;
+    });
+
+  const addCcManual = () => {
+    const val = ccInput.trim().toLowerCase();
+    if (!val.includes("@") || ccManual.includes(val) || ccSelected.has(val)) return;
+    setCcManual((prev) => [...prev, val]);
+    setCcInput("");
+  };
+
+  const removeCcManual = (email: string) =>
+    setCcManual((prev) => prev.filter((e) => e !== email));
+
+  const allCc = [...ccSelected, ...ccManual];
 
   // ── Sender profile ──
   const [profile, setProfile] = useState<SenderProfile>(loadProfile);
@@ -177,6 +221,11 @@ export function OutreachEngine({ result, onClose }: Props) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [sendError, setSendError] = useState("");
+
+  // ── Doc attachments ──
+  const [savedDocs, setSavedDocs] = useState<OutreachDoc[]>([]);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
 
   // ── History ──
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -225,6 +274,48 @@ export function OutreachEngine({ result, onClose }: Props) {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  // Fetch saved docs on mount
+  useEffect(() => {
+    fetch("/api/docs")
+      .then((r) => r.json())
+      .then((d) => setSavedDocs(d.docs ?? []))
+      .catch(() => {});
+  }, []);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/docs", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error || "Upload failed");
+      const doc: OutreachDoc = await res.json();
+      setSavedDocs((prev) => [doc, ...prev]);
+      setSelectedDocIds((prev) => new Set([...prev, doc.id]));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    await fetch(`/api/docs/${id}`, { method: "DELETE" });
+    setSavedDocs((prev) => prev.filter((d) => d.id !== id));
+    setSelectedDocIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+  };
+
+  const toggleDoc = (id: string) => {
+    setSelectedDocIds((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
   const activeSender = profileOverride ? overrideProfile : profile;
 
   // ── Generate ──
@@ -268,24 +359,21 @@ export function OutreachEngine({ result, onClose }: Props) {
     setSending(true);
     setSendError("");
     try {
-      const recipients = [
-        effectiveTo,
-        ...extraRecipients.split(",").map((e) => e.trim()).filter((e) => e.includes("@")),
-      ].filter(Boolean);
-
       const res = await fetch("/api/outreach", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           resultId: result.id,
           toEmail: effectiveTo,
-          toEmails: recipients,
+          toEmails: [effectiveTo],
+          cc: allCc,
           subject: editedSubject || template.subject,
           body: editedBody || template.body,
           approachType: template.approachType,
           segment: template.approachType,
           variantIndex: activeVariant,
           templateName: template.name,
+          docIds: [...selectedDocIds],
         }),
       });
       const data = await res.json();
@@ -420,14 +508,145 @@ export function OutreachEngine({ result, onClose }: Props) {
                     className="w-full bg-slate-800/60 border border-slate-700/50 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
                   />
                 )}
-                {/* Extra recipients */}
-                <input
-                  type="text"
-                  value={extraRecipients}
-                  onChange={(e) => setExtraRecipients(e.target.value)}
-                  placeholder="More recipients, comma-separated (optional)"
-                  className="w-full bg-slate-800/60 border border-slate-700/50 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
-                />
+                {/* CC */}
+                <div className="flex flex-col gap-1.5 pt-1 border-t border-slate-800/60">
+                  <label className="text-xs text-slate-400 font-medium">CC</label>
+
+                  {/* Known contact chips */}
+                  {availableEmails.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {availableEmails.map((em) => {
+                        const active = ccSelected.has(em);
+                        return (
+                          <button
+                            key={em}
+                            type="button"
+                            onClick={() => toggleCc(em)}
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-all ${
+                              active
+                                ? "bg-sky-500/15 border-sky-500/40 text-sky-300"
+                                : "bg-slate-800/60 border-slate-700/40 text-slate-500 hover:border-slate-600/60 hover:text-slate-300"
+                            }`}
+                          >
+                            {active && <Check className="w-2.5 h-2.5" />}
+                            {em}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Manual CC input */}
+                  <div className="flex gap-1.5">
+                    <input
+                      type="email"
+                      value={ccInput}
+                      onChange={(e) => setCcInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addCcManual(); }
+                      }}
+                      placeholder="Add email and press Enter…"
+                      className="flex-1 bg-slate-800/60 border border-slate-700/50 text-slate-200 text-xs rounded-lg px-2.5 py-1.5 placeholder:text-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500/40"
+                    />
+                    <button
+                      type="button"
+                      onClick={addCcManual}
+                      disabled={!ccInput.includes("@")}
+                      className="px-2.5 py-1 rounded-lg border border-slate-700/50 text-slate-400 hover:text-sky-300 hover:border-sky-500/30 text-xs disabled:opacity-30 transition-all"
+                    >
+                      Add
+                    </button>
+                  </div>
+
+                  {/* Manually added CC tags */}
+                  {ccManual.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {ccManual.map((em) => (
+                        <span
+                          key={em}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] bg-slate-700/40 border border-slate-600/40 text-slate-300"
+                        >
+                          {em}
+                          <button
+                            type="button"
+                            onClick={() => removeCcManual(em)}
+                            className="text-slate-500 hover:text-red-400 transition-colors"
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Attachments */}
+              <div className="p-3 flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+                    <Paperclip className="w-3.5 h-3.5" />
+                    Attachments
+                    {selectedDocIds.size > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-semibold">
+                        {selectedDocIds.size}
+                      </span>
+                    )}
+                  </span>
+                  <label className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border cursor-pointer transition-all ${
+                    uploading
+                      ? "border-slate-700/40 text-slate-600"
+                      : "border-slate-700/40 text-slate-500 hover:text-sky-300 hover:border-sky-500/30"
+                  }`}>
+                    {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                    {uploading ? "Uploading…" : "Upload"}
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.pptx,.xlsx"
+                      className="hidden"
+                      disabled={uploading}
+                      onChange={handleUpload}
+                    />
+                  </label>
+                </div>
+
+                {savedDocs.length === 0 ? (
+                  <p className="text-[10px] text-slate-600 italic">No saved docs — upload one above</p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {savedDocs.map((doc) => {
+                      const selected = selectedDocIds.has(doc.id);
+                      return (
+                        <div
+                          key={doc.id}
+                          onClick={() => toggleDoc(doc.id)}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border cursor-pointer transition-all group ${
+                            selected
+                              ? "bg-sky-500/10 border-sky-500/30"
+                              : "bg-slate-800/30 border-slate-700/40 hover:border-slate-600/60"
+                          }`}
+                        >
+                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                            selected ? "bg-sky-500 border-sky-500" : "border-slate-600"
+                          }`}>
+                            {selected && <Check className="w-2 h-2 text-white" />}
+                          </div>
+                          <FileText className={`w-3 h-3 shrink-0 ${selected ? "text-sky-400" : "text-slate-500"}`} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[11px] text-slate-300 truncate">{doc.name}</p>
+                            <p className="text-[9px] text-slate-600">{fmtSize(doc.size)}</p>
+                          </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleDeleteDoc(doc.id); }}
+                            className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-red-400 transition-all shrink-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Sender profile */}
@@ -767,12 +986,20 @@ export function OutreachEngine({ result, onClose }: Props) {
 
         {/* ── FOOTER ── */}
         <div className="border-t border-slate-800/60 px-5 py-3.5 flex items-center gap-3 shrink-0">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
             <p className="text-xs text-slate-600 truncate flex items-center gap-1">
               <Mail className="w-3 h-3" />
               {effectiveTo || "No recipient"}
-              {extraRecipients && ` + ${extraRecipients.split(",").filter((e) => e.trim()).length} more`}
+              {allCc.length > 0 && (
+                <span className="text-slate-700">· CC {allCc.length}</span>
+              )}
             </p>
+            {selectedDocIds.size > 0 && (
+              <p className="text-[10px] text-sky-400 flex items-center gap-1">
+                <Paperclip className="w-2.5 h-2.5" />
+                {selectedDocIds.size} attachment{selectedDocIds.size !== 1 ? "s" : ""}
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-slate-300 text-xs transition-colors shrink-0">
             Cancel

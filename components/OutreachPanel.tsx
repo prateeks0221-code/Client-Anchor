@@ -16,6 +16,10 @@ import {
   Zap,
   TrendingUp,
   Handshake,
+  Paperclip,
+  Upload,
+  Trash2,
+  FileText,
 } from "lucide-react";
 import {
   DEFAULT_TEMPLATES,
@@ -79,6 +83,23 @@ function collectEmails(result: DashboardResult): string[] {
   return [...new Set(emails)];
 }
 
+// ── Doc types ─────────────────────────────────────────────────────────────────
+
+interface OutreachDoc {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  path: string;
+  createdAt: string;
+}
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 interface Props {
@@ -114,6 +135,12 @@ export function OutreachPanel({ result, onClose }: Props) {
   // Preview mode toggle
   const [preview, setPreview] = useState(false);
 
+  // Doc attachments
+  const [savedDocs, setSavedDocs] = useState<OutreachDoc[]>([]);
+  const [selectedDocIds, setSelectedDocIds] = useState<Set<string>>(new Set());
+  const [uploading, setUploading] = useState(false);
+  const [showDocs, setShowDocs] = useState(true);
+
   // Send state
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -139,6 +166,49 @@ export function OutreachPanel({ result, onClose }: Props) {
     return () => { document.body.style.overflow = ""; };
   }, []);
 
+  // Fetch saved docs on mount
+  useEffect(() => {
+    fetch("/api/docs")
+      .then((r) => r.json())
+      .then((d) => setSavedDocs(d.docs ?? []))
+      .catch(() => {});
+  }, []);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/docs", { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).error || "Upload failed");
+      const doc: OutreachDoc = await res.json();
+      setSavedDocs((prev) => [doc, ...prev]);
+      setSelectedDocIds((prev) => new Set([...prev, doc.id]));
+      setShowDocs(true);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteDoc = async (id: string) => {
+    await fetch(`/api/docs/${id}`, { method: "DELETE" });
+    setSavedDocs((prev) => prev.filter((d) => d.id !== id));
+    setSelectedDocIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
+  };
+
+  const toggleDoc = (id: string) => {
+    setSelectedDocIds((prev) => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id); else s.add(id);
+      return s;
+    });
+  };
+
   const renderedSubject = renderTemplate(template.subject, vars);
   const renderedBody = renderTemplate(template.body, vars);
 
@@ -161,6 +231,7 @@ export function OutreachPanel({ result, onClose }: Props) {
           body: renderedBody,
           approachType: template.approachType,
           templateName: template.name,
+          docIds: [...selectedDocIds],
         }),
       });
       const data = await res.json();
@@ -258,6 +329,82 @@ export function OutreachPanel({ result, onClose }: Props) {
             )}
           </div>
 
+          {/* Attachments */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <button
+                onClick={() => setShowDocs((p) => !p)}
+                className="flex items-center gap-1.5 text-xs text-slate-400 font-medium hover:text-slate-200 transition-colors"
+              >
+                <Paperclip className="w-3.5 h-3.5" />
+                Attachments
+                {selectedDocIds.size > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-semibold">
+                    {selectedDocIds.size}
+                  </span>
+                )}
+              </button>
+              <label className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border cursor-pointer transition-all ${
+                uploading
+                  ? "border-slate-700/40 text-slate-600"
+                  : "border-slate-700/40 text-slate-500 hover:text-sky-300 hover:border-sky-500/30"
+              }`}>
+                {uploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Upload className="w-3 h-3" />}
+                {uploading ? "Uploading…" : "Upload"}
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.pptx,.xlsx"
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={handleUpload}
+                />
+              </label>
+            </div>
+
+            {showDocs && (
+              <div className="flex flex-col gap-1">
+                {savedDocs.length === 0 ? (
+                  <p className="text-[11px] text-slate-600 italic py-1">
+                    No saved docs — upload one above
+                  </p>
+                ) : (
+                  savedDocs.map((doc) => {
+                    const selected = selectedDocIds.has(doc.id);
+                    return (
+                      <div
+                        key={doc.id}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer group ${
+                          selected
+                            ? "bg-sky-500/10 border-sky-500/30"
+                            : "bg-slate-800/30 border-slate-700/40 hover:border-slate-600/60"
+                        }`}
+                        onClick={() => toggleDoc(doc.id)}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                          selected ? "bg-sky-500 border-sky-500" : "border-slate-600"
+                        }`}>
+                          {selected && <Check className="w-2.5 h-2.5 text-white" />}
+                        </div>
+                        <FileText className={`w-3.5 h-3.5 shrink-0 ${selected ? "text-sky-400" : "text-slate-500"}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-slate-300 truncate">{doc.name}</p>
+                          <p className="text-[10px] text-slate-600">{fmtSize(doc.size)}</p>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteDoc(doc.id); }}
+                          className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/10 text-red-400 transition-all shrink-0"
+                          title="Delete saved doc"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Variable fields */}
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -335,11 +482,17 @@ export function OutreachPanel({ result, onClose }: Props) {
 
         {/* ── Footer ── */}
         <div className="border-t border-slate-800/60 px-6 py-4 flex items-center gap-3 shrink-0">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
             <p className="text-xs text-slate-500 truncate">
               <Mail className="w-3 h-3 inline mr-1" />
               {effectiveTo || "No recipient set"}
             </p>
+            {selectedDocIds.size > 0 && (
+              <p className="text-[10px] text-sky-400 flex items-center gap-1">
+                <Paperclip className="w-2.5 h-2.5" />
+                {selectedDocIds.size} attachment{selectedDocIds.size !== 1 ? "s" : ""}
+              </p>
+            )}
           </div>
 
           <button

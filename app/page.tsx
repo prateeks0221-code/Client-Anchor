@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { DndContext, DragOverlay, closestCenter } from "@dnd-kit/core";
+import FunnelPanel from "@/components/FunnelPanel";
 import {
   Select,
   SelectContent,
@@ -17,6 +19,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
+interface FunnelItem {
+  id: string;
+  resultId: string;
+  position: number;
+  result: {
+    id: string;
+    name: string;
+    type: string;
+    email?: string;
+    website?: string;
+  };
+}
+
+interface Funnel {
+  id: string;
+  name: string;
+  type: string;
+  description?: string;
+  position: number;
+  items: FunnelItem[];
+}
 
 type OpportunityType = "business" | "job" | "partnership" | "";
 
@@ -51,11 +75,19 @@ function HomeContent() {
   const [prompt, setPrompt] = useState(searchParams.get("q") ?? "");
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS);
   const [loading, setLoading] = useState(false);
+  const [funnels, setFunnels] = useState<Funnel[]>([]);
 
   const setFilter = <K extends keyof SearchFilters>(
     key: K,
     value: SearchFilters[K]
   ) => setFilters((prev) => ({ ...prev, [key]: value }));
+
+  useEffect(() => {
+    fetch("/api/funnels")
+      .then((r) => r.json())
+      .then((d) => setFunnels(d.funnels ?? []))
+      .catch((err) => console.error("Failed to fetch funnels:", err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,7 +160,8 @@ function HomeContent() {
   ].filter(Boolean).length;
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-16 overflow-hidden bg-[#020817]">
+    <DndContext collisionDetection={closestCenter}>
+      <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-16 overflow-hidden bg-[#020817] pr-80">
       {/* Multi-layer atmospheric glow */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[500px] w-[800px] rounded-full bg-sky-600/8 blur-[120px]" />
@@ -440,7 +473,16 @@ function HomeContent() {
           Powered by AI · Real-world data · Enriched contacts
         </p>
       </div>
+      <FunnelPanel
+        funnels={funnels}
+        onFunnelsChange={setFunnels}
+        onAddToFunnel={() => {}}
+        onRemoveFromFunnel={() => {}}
+        topOffset="top-0"
+      />
+      <DragOverlay />
     </main>
+    </DndContext>
   );
 }
 

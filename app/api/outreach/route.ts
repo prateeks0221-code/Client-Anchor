@@ -1,22 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
+import path from 'path'
 import { prisma } from '@/lib/prisma'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+const UPLOAD_DIR = path.join(process.cwd(), 'uploads')
 
-// Sender — must be a verified domain in Resend prod; onboarding@resend.dev works in dev/test
-const FROM = process.env.RESEND_FROM_EMAIL || 'ClientAnchor <onboarding@resend.dev>'
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+})
+
+const FROM = process.env.GMAIL_USER ?? ''
 
 interface OutreachPayload {
   resultId: string
   toEmail: string
-  toEmails?: string[]     // multi-recipient (primary + extras)
+  toEmails?: string[]
+  cc?: string[]
   subject: string
-  body: string            // rendered (vars substituted)
-  approachType: string    // 'pas' | 'partnership' | 'job' | 'custom'
-  segment?: string        // alias for approachType
-  variantIndex?: number   // 0=A, 1=B, 2=C
+  body: string
+  approachType: string
+  segment?: string
+  variantIndex?: number
   templateName: string
+  docIds?: string[]
 }
 
 export async function POST(req: NextRequest) {
@@ -27,7 +39,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
   }
 
-  const { resultId, toEmail, toEmails, subject, body, approachType, segment, variantIndex, templateName } = payload
+  const { resultId, toEmail, toEmails, cc, subject, body, approachType, segment, variantIndex, templateName, docIds } = payload
 
   if (!resultId || !toEmail || !subject || !body) {
     return NextResponse.json({ error: 'Missing required fields: resultId, toEmail, subject, body' }, { status: 422 })
@@ -56,16 +68,29 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  // Send via Resend
+  // Resolve attachments
+  const attachments: nodemailer.SendMailOptions['attachments'] = []
+  if (docIds && docIds.length > 0) {
+    const docs = await prisma.outreachDoc.findMany({ where: { id: { in: docIds } } })
+    for (const doc of docs) {
+      attachments.push({
+        filename: doc.name,
+        path: path.join(UPLOAD_DIR, doc.path),
+        contentType: doc.mimeType,
+      })
+    }
+  }
+
+  // Send via Gmail SMTP
   try {
-    const { data, error } = await resend.emails.send({
+    const info = await transporter.sendMail({
       from: FROM,
-      to: allRecipients,
+      to: allRecipients.join(', '),
+      cc: cc && cc.length > 0 ? cc.join(', ') : undefined,
       subject,
       text: body,
+      attachments,
     })
-
-    if (error) throw new Error(error.message)
 
     // Mark sent
     await prisma.outreachEvent.update({
@@ -76,7 +101,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       eventId: event.id,
-      resendId: data?.id,
+      messageId: info.messageId,
       to: toEmail,
       subject,
     })

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ExternalLink,
   Mail,
@@ -15,7 +15,13 @@ import {
   ChevronRight,
   DollarSign,
   Link2,
+  GripVertical,
+  Check,
+  ChevronDown,
+  Filter,
 } from "lucide-react";
+import { useDraggable } from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent } from "@/components/ui/card";
 import { DashboardResult } from "@/types";
 import { ResultDetail } from "@/components/ResultDetail";
@@ -89,15 +95,107 @@ function getMapsUrl(enrichment: Record<string, unknown>): string | null {
   return null;
 }
 
+// ── Funnel selector dropdown ─────────────────────────────────────────────────
+
+interface FunnelSelectorProps {
+  funnels: Array<{ id: string; name: string; type: string }>;
+  funnelledFunnelIds: string[];
+  onAdd: (funnelId: string) => void;
+}
+
+function FunnelSelector({ funnels, funnelledFunnelIds, onAdd }: FunnelSelectorProps) {
+  const [open, setOpen] = useState(false);
+
+  if (funnels.length === 0) return null;
+
+  const allIn = funnels.every((f) => funnelledFunnelIds.includes(f.id));
+
+  return (
+    <div className="relative">
+      <button
+        onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
+        title="Add to funnel"
+        className={`flex items-center gap-1 text-xs transition-colors px-1.5 py-0.5 rounded ${
+          allIn
+            ? "text-emerald-400 bg-emerald-500/10"
+            : "text-slate-500 hover:text-sky-300 hover:bg-sky-500/10"
+        }`}
+      >
+        <Filter className="w-3 h-3" />
+        {allIn ? <Check className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+            <motion.div
+              initial={{ opacity: 0, y: 4, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 4, scale: 0.97 }}
+              transition={{ duration: 0.12 }}
+              className="absolute bottom-full right-0 mb-1.5 w-48 bg-slate-900 border border-slate-700/60 rounded-xl shadow-xl z-50 overflow-hidden"
+            >
+              <p className="px-3 py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-widest border-b border-slate-800">
+                Add to funnel
+              </p>
+              {funnels.map((f) => {
+                const added = funnelledFunnelIds.includes(f.id);
+                return (
+                  <button
+                    key={f.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!added) onAdd(f.id);
+                      setOpen(false);
+                    }}
+                    disabled={added}
+                    className={`w-full flex items-center justify-between gap-2 px-3 py-2.5 text-xs transition-colors ${
+                      added
+                        ? "text-emerald-400 cursor-default"
+                        : "text-slate-300 hover:bg-slate-800/60 hover:text-sky-300"
+                    }`}
+                  >
+                    <span className="truncate">{f.name}</span>
+                    {added && <Check className="w-3 h-3 shrink-0" />}
+                  </button>
+                );
+              })}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 // ── ResultCard ───────────────────────────────────────────────────────────────
+
+interface FunnelRef {
+  id: string;
+  name: string;
+  type: string;
+  items: Array<{ resultId: string; funnelId?: string }>;
+}
 
 interface Props {
   result: DashboardResult;
   index: number;
+  funnels?: FunnelRef[];
+  onAddToFunnel?: (funnelId: string, resultId: string) => void;
 }
 
-export function ResultCard({ result, index }: Props) {
+export function ResultCard({ result, index, funnels = [], onAddToFunnel }: Props) {
   const [detailOpen, setDetailOpen] = useState(false);
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: result.id,
+    data: { resultId: result.id, title: result.title },
+  });
+
+  const style = transform
+    ? { transform: CSS.Translate.toString(transform) }
+    : undefined;
 
   const e = result.enrichment as Record<string, any>;
   const type = (e.type as string | undefined)?.toLowerCase();
@@ -118,32 +216,58 @@ export function ResultCard({ result, index }: Props) {
   const rating = e.rating as number | undefined;
   const reviewCount = e.userRatingCount as number | undefined;
 
-  // Contact from Contact model
   const primaryContact =
     result.contacts?.find((c) => c.isPrimary) ?? result.contacts?.[0] ?? null;
-
-  // Action URL: website for business, apply for job
   const primaryUrl = type === "job" ? (applyUrl || result.url) : result.url;
+
+  // Funnel state for this result
+  const funnelledFunnelIds = funnels
+    .filter((f) => f.items.some((item) => item.resultId === result.id))
+    .map((f) => f.id);
+  const isFunnelled = funnelledFunnelIds.length > 0;
 
   return (
     <>
       <motion.div
+        ref={setNodeRef}
+        style={style}
         initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
+        animate={{ opacity: isDragging ? 0.4 : 1, y: 0 }}
         transition={{ duration: 0.3, delay: Math.min(index * 0.04, 0.5) }}
-        className="h-full"
+        className={`h-full ${isDragging ? "z-50" : ""}`}
       >
-        <Card className="bg-slate-900/60 border-slate-700/60 hover:border-sky-500/30 transition-all duration-200 group h-full flex flex-col">
+        <Card className={`bg-slate-900/60 border-slate-700/60 hover:border-sky-500/30 transition-all duration-200 group h-full flex flex-col ${
+          isFunnelled ? "ring-1 ring-emerald-500/25 border-emerald-500/20" : ""
+        }`}>
           <CardContent className="pt-5 pb-4 px-5 flex flex-col gap-3 flex-1">
-            {/* Header: title + score */}
-            <div className="flex items-start justify-between gap-3">
+            {/* Header: drag handle + title + score */}
+            <div className="flex items-start gap-2">
+              {/* Drag handle */}
               <button
-                onClick={() => setDetailOpen(true)}
-                className="flex-1 text-left text-slate-50 font-semibold text-sm leading-snug line-clamp-2 group-hover:text-sky-300 transition-colors hover:text-sky-300"
+                {...listeners}
+                {...attributes}
+                className="mt-0.5 text-slate-700 hover:text-slate-400 cursor-grab active:cursor-grabbing transition-colors shrink-0"
+                title="Drag to funnel"
               >
-                {result.title}
+                <GripVertical className="w-3.5 h-3.5" />
               </button>
-              {result.score > 0 && <ScoreBadge score={result.score} />}
+              <div className="flex items-start justify-between gap-3 flex-1 min-w-0">
+                <button
+                  onClick={() => setDetailOpen(true)}
+                  className="flex-1 text-left text-slate-50 font-semibold text-sm leading-snug line-clamp-2 group-hover:text-sky-300 transition-colors hover:text-sky-300"
+                >
+                  {result.title}
+                </button>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isFunnelled && (
+                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                      <Check className="w-2.5 h-2.5" />
+                      Funnelled
+                    </span>
+                  )}
+                  {result.score > 0 && <ScoreBadge score={result.score} />}
+                </div>
+              </div>
             </div>
 
             {/* Type + source */}
@@ -155,7 +279,7 @@ export function ResultCard({ result, index }: Props) {
               </span>
             </div>
 
-            {/* Job: company + salary snippet */}
+            {/* Job: company + salary */}
             {type === "job" && (company || salary) && (
               <div className="flex flex-wrap items-center gap-2">
                 {company && (
@@ -173,7 +297,7 @@ export function ResultCard({ result, index }: Props) {
               </div>
             )}
 
-            {/* Business: rating snippet */}
+            {/* Business: rating */}
             {type !== "job" && rating !== undefined && (
               <div className="flex items-center gap-1.5">
                 <span className="text-amber-400 text-xs font-semibold">★ {rating.toFixed(1)}</span>
@@ -190,7 +314,7 @@ export function ResultCard({ result, index }: Props) {
               </p>
             )}
 
-            {/* Quick contact row */}
+            {/* Contact row */}
             <div className="flex flex-col gap-1">
               {email && (
                 <a href={`mailto:${email}`} className="flex items-center gap-2 text-xs text-slate-400 hover:text-sky-300 transition-colors min-w-0">
@@ -212,7 +336,7 @@ export function ResultCard({ result, index }: Props) {
               )}
             </div>
 
-            {/* Primary contact (Contact model) */}
+            {/* Primary contact */}
             {primaryContact && (
               <div className="border-t border-slate-800/60 pt-2.5">
                 <div className="flex items-start gap-2">
@@ -239,30 +363,18 @@ export function ResultCard({ result, index }: Props) {
               </div>
             )}
 
-            {/* Footer actions */}
+            {/* Footer */}
             <div className="mt-auto pt-2 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                {/* Maps pin — business only */}
                 {mapsUrl && type !== "job" && (
-                  <a
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title="Open in Google Maps"
-                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-sky-300 transition-colors"
-                  >
+                  <a href={mapsUrl} target="_blank" rel="noopener noreferrer" title="Open in Google Maps"
+                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-sky-300 transition-colors">
                     <Navigation className="w-3.5 h-3.5" />
                   </a>
                 )}
-
-                {/* Primary link */}
                 {primaryUrl ? (
-                  <a
-                    href={primaryUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors font-medium"
-                  >
+                  <a href={primaryUrl} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors font-medium">
                     {type === "job" ? (
                       <><Briefcase className="w-3 h-3" /> Apply</>
                     ) : (
@@ -272,19 +384,27 @@ export function ResultCard({ result, index }: Props) {
                 ) : null}
               </div>
 
-              {/* Expand button */}
-              <button
-                onClick={() => setDetailOpen(true)}
-                className="flex items-center gap-1 text-xs text-slate-500 hover:text-sky-300 transition-colors ml-auto"
-              >
-                Details <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2 ml-auto">
+                {/* Funnel selector */}
+                {onAddToFunnel && funnels.length > 0 && (
+                  <FunnelSelector
+                    funnels={funnels}
+                    funnelledFunnelIds={funnelledFunnelIds}
+                    onAdd={(funnelId) => onAddToFunnel(funnelId, result.id)}
+                  />
+                )}
+                <button
+                  onClick={() => setDetailOpen(true)}
+                  className="flex items-center gap-1 text-xs text-slate-500 hover:text-sky-300 transition-colors"
+                >
+                  Details <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </CardContent>
         </Card>
       </motion.div>
 
-      {/* Detail modal */}
       {detailOpen && (
         <ResultDetail result={result} onClose={() => setDetailOpen(false)} />
       )}

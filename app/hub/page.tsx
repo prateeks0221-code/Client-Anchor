@@ -12,16 +12,16 @@ import {
   Archive,
   Search,
   AlertCircle,
-  ChevronDown,
   Briefcase,
   Building2,
   Handshake,
   Clock,
   BarChart2,
   Loader2,
+  Filter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -112,7 +112,7 @@ function SearchCard({ search, onArchive, onRefreshed }: CardProps) {
       if (!res.ok) throw new Error(data?.error || "Refresh failed");
       setRefreshMsg(`+${data.newResults} new`);
       onRefreshed(search.id, data.totalCount);
-    } catch (e) {
+    } catch {
       setRefreshMsg("Failed");
     } finally {
       setRefreshing(false);
@@ -141,7 +141,7 @@ function SearchCard({ search, onArchive, onRefreshed }: CardProps) {
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
       transition={{ duration: 0.25 }}
-      className="bg-slate-900/60 border border-slate-700/60 rounded-xl p-5 flex flex-col gap-3 hover:border-sky-500/25 transition-colors"
+      className="bg-slate-900/60 border border-slate-700/60 hover:border-sky-500/25 rounded-xl p-5 flex flex-col gap-3 transition-all"
     >
       {/* Status dot + intent + time */}
       <div className="flex items-center justify-between gap-2">
@@ -266,7 +266,6 @@ function SkeletonCard() {
 
 type SortKey = "newest" | "score" | "results";
 type IntentFilter = "all" | "business" | "job" | "partnership";
-type StatusFilter = "all" | "active" | "stale" | "failed";
 
 export default function HubPage() {
   const router = useRouter();
@@ -277,12 +276,11 @@ export default function HubPage() {
   // Controls
   const [sort, setSort] = useState<SortKey>("newest");
   const [intentFilter, setIntentFilter] = useState<IntentFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 
   useEffect(() => {
     fetch("/api/searches")
       .then((r) => r.json())
-      .then((d) => setSearches(d.searches ?? []))
+      .then((data) => setSearches(data.searches ?? []))
       .catch(() => setError("Failed to load searches"))
       .finally(() => setLoading(false));
   }, []);
@@ -298,18 +296,8 @@ export default function HubPage() {
   const displayed = useMemo(() => {
     let arr = [...searches];
 
-    // Intent filter
     if (intentFilter !== "all") arr = arr.filter((s) => s.intent === intentFilter);
 
-    // Status filter
-    if (statusFilter !== "all") {
-      arr = arr.filter((s) => {
-        const st = statusInfo(s).label.toLowerCase();
-        return st === statusFilter;
-      });
-    }
-
-    // Sort
     arr.sort((a, b) => {
       if (sort === "score") return b.avgScore - a.avgScore;
       if (sort === "results") return b.resultCount - a.resultCount;
@@ -317,7 +305,7 @@ export default function HubPage() {
     });
 
     return arr;
-  }, [searches, sort, intentFilter, statusFilter]);
+  }, [searches, sort, intentFilter]);
 
   return (
     <div className="min-h-screen bg-[#020817]">
@@ -344,14 +332,25 @@ export default function HubPage() {
             </h1>
           </div>
 
-          <Button
-            onClick={() => router.push("/")}
-            size="sm"
-            className="bg-sky-600 hover:bg-sky-500 text-white gap-1.5 text-xs"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">New Search</span>
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => router.push("/funnels")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700/60 text-slate-400 hover:text-sky-300 hover:border-sky-500/30 text-xs transition-colors"
+              title="Manage funnels"
+            >
+              <Filter className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Funnels</span>
+            </button>
+
+            <Button
+              onClick={() => router.push("/")}
+              size="sm"
+              className="bg-sky-600 hover:bg-sky-500 text-white gap-1.5 text-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">New Search</span>
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -451,7 +450,7 @@ export default function HubPage() {
             <Search className="w-8 h-8 text-slate-600" />
             <p className="text-slate-400 text-sm">No searches match current filters</p>
             <button
-              onClick={() => { setIntentFilter("all"); setStatusFilter("all"); }}
+              onClick={() => setIntentFilter("all")}
               className="text-sky-400 text-xs hover:text-sky-300"
             >
               Reset filters

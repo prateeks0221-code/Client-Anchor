@@ -14,6 +14,7 @@ model Account {
   createdAt     DateTime  @default(now())
   searches      SearchQuery[]
   templates     EmailTemplate[]
+  funnels       Funnel[]
 }
 
 model SearchQuery {
@@ -49,6 +50,7 @@ model Result {
   source        String
   sourceUrl     String?
   contacts      Contact[]
+  funnelItems   FunnelItem[]
   rawData       Json?
   enriched      Boolean   @default(false)
   archived      Boolean   @default(false)
@@ -130,4 +132,41 @@ model SenderProfile {
   fromAlias     String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
+}
+
+// User-created funnels for organizing results
+model Funnel {
+  id            String    @id @default(cuid())
+  userId        String
+  user          Account   @relation(fields: [userId], references: [id])
+  name          String
+  type          String    // investor | job | partner | custom
+  description   String?   @db.Text
+  position      Int       @default(0)  // sort order
+  items         FunnelItem[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// Saved docs for outreach email attachments
+model OutreachDoc {
+  id        String   @id @default(cuid())
+  name      String
+  size      Int
+  mimeType  String
+  path      String   // filename inside uploads/ dir
+  createdAt DateTime @default(now())
+}
+
+// Results tagged into funnels
+model FunnelItem {
+  id            String    @id @default(cuid())
+  funnelId      String
+  funnel        Funnel    @relation(fields: [funnelId], references: [id], onDelete: Cascade)
+  resultId      String
+  result        Result    @relation(fields: [resultId], references: [id], onDelete: Cascade)
+  position      Int       @default(0)  // order within funnel
+  addedAt       DateTime  @default(now())
+
+  @@unique([funnelId, resultId])  // prevent duplicate items in same funnel
 }

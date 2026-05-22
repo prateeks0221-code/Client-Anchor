@@ -41,11 +41,13 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
-# Prisma files — needed for `prisma migrate deploy` at startup
+# Prisma schema — needed for `prisma migrate deploy`
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
+
+# Full node_modules from builder — Prisma 7 CLI has a deep transitive dep tree
+# (effect, c12, giget, jiti, …) that can't be cherry-picked reliably.
+# Standalone server.js works fine with a superset of modules.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 
 # Expose prisma CLI in PATH (standalone output has no .bin/ symlinks)
 RUN ln -sf /app/node_modules/prisma/build/index.js /usr/local/bin/prisma && \

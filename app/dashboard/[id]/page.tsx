@@ -393,7 +393,7 @@ export default function DashboardPage() {
         </header>
 
         {/* ── Body ── */}
-        <div className="flex flex-1 max-w-screen-2xl mx-auto w-full pr-72">
+        <div className="flex flex-1 max-w-screen-2xl mx-auto w-full">
           {/* Desktop filter sidebar */}
           <aside className="hidden sm:block w-56 shrink-0 border-r border-slate-800/50 sticky top-14 self-start max-h-[calc(100vh-56px)] overflow-y-auto">
             <FilterSidebar {...sidebarProps} />

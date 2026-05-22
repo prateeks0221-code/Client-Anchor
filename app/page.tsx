@@ -161,12 +161,12 @@ function HomeContent() {
 
   return (
     <DndContext collisionDetection={closestCenter}>
-      <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-16 overflow-hidden bg-[#020817] pr-80">
+      <main className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12 sm:py-16 overflow-hidden bg-[#020817]">
       {/* Multi-layer atmospheric glow */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[500px] w-[800px] rounded-full bg-sky-600/8 blur-[120px]" />
-        <div className="absolute top-1/3 left-1/3 h-[300px] w-[400px] rounded-full bg-cyan-500/6 blur-[80px]" />
-        <div className="absolute bottom-1/4 right-1/4 h-[200px] w-[300px] rounded-full bg-blue-600/5 blur-[60px]" />
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 h-[300px] w-[90vw] sm:h-[500px] sm:w-[800px] rounded-full bg-sky-600/8 blur-[120px]" />
+        <div className="absolute top-1/3 left-1/3 h-[200px] w-[60vw] sm:h-[300px] sm:w-[400px] rounded-full bg-cyan-500/6 blur-[80px]" />
+        <div className="absolute bottom-1/4 right-1/4 h-[150px] w-[50vw] sm:h-[200px] sm:w-[300px] rounded-full bg-blue-600/5 blur-[60px]" />
       </div>
 
       {/* Subtle grid overlay */}
@@ -184,7 +184,7 @@ function HomeContent() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          className="flex items-center gap-2.5 mb-10 justify-center"
+          className="flex items-center gap-2 sm:gap-2.5 mb-8 sm:mb-10 justify-center flex-wrap"
         >
           <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/20">
             <Anchor className="text-sky-400 w-4 h-4" />
@@ -194,7 +194,7 @@ function HomeContent() {
           </span>
           <button
             onClick={() => router.push("/hub")}
-            className="ml-4 flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-700/60 text-slate-500 hover:text-slate-300 hover:border-slate-600/40 text-xs transition-colors"
+            className="ml-2 sm:ml-4 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-700/60 text-slate-500 hover:text-slate-300 hover:border-slate-600/40 text-xs transition-colors"
           >
             <History className="w-3.5 h-3.5" />
             History
@@ -207,13 +207,13 @@ function HomeContent() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
         >
-          <h1 className="text-4xl sm:text-5xl font-bold text-center tracking-tight mb-4 leading-tight">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-center tracking-tight mb-3 sm:mb-4 leading-tight">
             <span className="text-slate-50">Anchor Your </span>
             <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-blue-400 bg-clip-text text-transparent">
               Next Opportunity
             </span>
           </h1>
-          <p className="text-center text-slate-500 text-sm mb-10 max-w-md mx-auto leading-relaxed">
+          <p className="text-center text-slate-500 text-xs sm:text-sm mb-8 sm:mb-10 max-w-md mx-auto leading-relaxed px-2">
             Describe what you need. AI finds matching businesses, roles, and
             partners — scored and enriched with contact data.
           </p>

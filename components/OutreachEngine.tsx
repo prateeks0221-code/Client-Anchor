@@ -438,7 +438,7 @@ export function OutreachEngine({ result, onClose }: Props) {
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/60 shrink-0">
           <div className="min-w-0">
             <h2 className="text-slate-50 font-bold text-sm">Outreach Engine</h2>
-            <p className="text-slate-500 text-xs truncate max-w-[400px]">{result.title}</p>
+            <p className="text-slate-500 text-xs truncate max-w-[200px] sm:max-w-[400px]">{result.title}</p>
           </div>
           <div className="flex items-center gap-2">
             <kbd className="hidden sm:inline text-[10px] text-slate-600 bg-slate-800/60 border border-slate-700/40 rounded px-1.5 py-0.5">

@@ -269,7 +269,7 @@ export function OutreachPanel({ result, onClose }: Props) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/60 shrink-0">
           <div>
             <h2 className="text-slate-50 font-semibold text-base">Send Outreach</h2>
-            <p className="text-slate-500 text-xs mt-0.5 truncate max-w-[340px]">{result.title}</p>
+            <p className="text-slate-500 text-xs mt-0.5 truncate max-w-[200px] sm:max-w-[340px]">{result.title}</p>
           </div>
           <button
             onClick={onClose}

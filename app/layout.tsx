@@ -19,7 +19,10 @@ export default function RootLayout({
       publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
     >
       <html lang="en" className="h-full antialiased">
-        <body className="min-h-full bg-slate-950 text-slate-50 font-sans flex flex-col">
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        </head>
+        <body className="min-h-full bg-slate-950 text-slate-50 font-sans flex flex-col overflow-x-hidden">
           {children}
           <Toaster
             position="bottom-right"

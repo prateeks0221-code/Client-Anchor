@@ -85,7 +85,7 @@ function KpiRow({ icon, label, value, href, mono }: {
   return (
     <div className="flex items-start gap-3 py-2.5 border-b border-slate-800/60 last:border-0">
       <span className="text-slate-600 mt-0.5 shrink-0">{icon}</span>
-      <span className="text-slate-500 text-xs w-24 shrink-0 mt-0.5">{label}</span>
+      <span className="text-slate-500 text-xs w-16 sm:w-24 shrink-0 mt-0.5">{label}</span>
       {href ? (
         <a href={href} target="_blank" rel="noopener noreferrer"
           className="text-sky-400 hover:text-sky-300 text-sm truncate transition-colors flex items-center gap-1">
@@ -340,7 +340,7 @@ export function ResultDetail({ result, onClose }: Props) {
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
-        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center sm:p-4"
       >
         <motion.div
           key="panel"
@@ -349,56 +349,53 @@ export function ResultDetail({ result, onClose }: Props) {
           exit={{ opacity: 0, scale: 0.96, y: 16 }}
           transition={{ type: "spring", stiffness: 350, damping: 30 }}
           onClick={(e) => e.stopPropagation()}
-          className="relative w-full max-w-2xl bg-[#0d1525] border border-slate-700/60 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+          className="relative w-full max-w-2xl bg-[#0d1525] border border-slate-700/60 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-start gap-4 p-6 border-b border-slate-800/60 shrink-0">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-slate-50 font-bold text-lg leading-snug mb-2">
-                {result.title}
-              </h2>
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Type badge */}
-                {type && (
-                  <Badge variant="secondary" className="bg-sky-500/10 text-sky-300 border-sky-500/20 text-xs capitalize">
-                    {type}
+          <div className="flex flex-col gap-3 p-4 sm:p-6 border-b border-slate-800/60 shrink-0">
+            <div className="flex items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-slate-50 font-bold text-base sm:text-lg leading-snug mb-2">
+                  {result.title}
+                </h2>
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                  {type && (
+                    <Badge variant="secondary" className="bg-sky-500/10 text-sky-300 border-sky-500/20 text-xs capitalize">
+                      {type}
+                    </Badge>
+                  )}
+                  <Badge variant="secondary" className="bg-slate-700/40 text-slate-400 border-slate-600/20 text-xs font-mono">
+                    {result.source}
                   </Badge>
-                )}
-                {/* Source badge */}
-                <Badge variant="secondary" className="bg-slate-700/40 text-slate-400 border-slate-600/20 text-xs font-mono">
-                  {result.source}
-                </Badge>
-                {/* Score */}
-                {result.score > 0 && (
-                  <Badge variant="secondary" className={`text-xs font-mono ${
-                    result.score >= 80 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" :
-                    result.score >= 60 ? "bg-sky-500/15 text-sky-300 border-sky-500/25" :
-                    "bg-amber-500/15 text-amber-300 border-amber-500/25"
-                  }`}>
-                    {result.score}% match
-                  </Badge>
-                )}
+                  {result.score > 0 && (
+                    <Badge variant="secondary" className={`text-xs font-mono ${
+                      result.score >= 80 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/25" :
+                      result.score >= 60 ? "bg-sky-500/15 text-sky-300 border-sky-500/25" :
+                      "bg-amber-500/15 text-amber-300 border-amber-500/25"
+                    }`}>
+                      {result.score}% match
+                    </Badge>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setOutreachOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors"
-              >
-                <Send className="w-3.5 h-3.5" />
-                Outreach
-              </button>
               <button
                 onClick={onClose}
-                className="text-slate-500 hover:text-slate-200 transition-colors p-1 rounded-lg hover:bg-slate-800/60"
+                className="text-slate-500 hover:text-slate-200 transition-colors p-1.5 rounded-lg hover:bg-slate-800/60 shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+            <button
+              onClick={() => setOutreachOpen(true)}
+              className="flex items-center justify-center gap-1.5 w-full sm:w-auto sm:self-start px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors"
+            >
+              <Send className="w-3.5 h-3.5" />
+              Outreach
+            </button>
           </div>
 
           {/* Scrollable body */}
-          <div className="overflow-y-auto flex-1 p-6 flex flex-col gap-5">
+          <div className="overflow-y-auto flex-1 p-4 sm:p-6 flex flex-col gap-4 sm:gap-5">
             {/* Description */}
             {result.description && (
               <p className="text-slate-400 text-sm leading-relaxed">
@@ -533,27 +530,16 @@ export function ResultDetail({ result, onClose }: Props) {
           </div>
 
           {/* Footer actions */}
-          <div className="border-t border-slate-800/60 p-4 flex items-center gap-3 shrink-0">
-            {/* Maps button — only for non-job types */}
+          <div className="border-t border-slate-800/60 p-3 sm:p-4 flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
             {mapsUrl && type !== "job" && (
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-sky-300 hover:border-sky-500/30 text-sm transition-all"
-              >
+              <a href={mapsUrl} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-sky-300 hover:border-sky-500/30 text-xs sm:text-sm transition-all">
                 <Navigation className="w-4 h-4" /> Maps
               </a>
             )}
-
-            {/* Primary CTA */}
             {result.url && (
-              <a
-                href={result.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm font-semibold transition-colors ml-auto"
-              >
+              <a href={result.url} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-semibold transition-colors">
                 {type === "job" ? (
                   <><Briefcase className="w-4 h-4" /> Apply</>
                 ) : (
@@ -562,13 +548,8 @@ export function ResultDetail({ result, onClose }: Props) {
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             )}
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onClose}
-              className="text-slate-500 hover:text-slate-300 ml-auto"
-            >
+            <Button variant="ghost" size="sm" onClick={onClose}
+              className="text-slate-500 hover:text-slate-300 ml-auto">
               Close
             </Button>
           </div>

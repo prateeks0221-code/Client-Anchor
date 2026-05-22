@@ -355,15 +355,15 @@ export default function HubPage() {
       </header>
 
       {/* Controls bar */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center gap-3 border-b border-slate-800/40">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 border-b border-slate-800/40">
         {/* Sort */}
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className="text-slate-500">Sort:</span>
+        <div className="flex items-center gap-1.5 text-xs overflow-x-auto scrollbar-none">
+          <span className="text-slate-500 shrink-0">Sort:</span>
           {(["newest", "score", "results"] as SortKey[]).map((s) => (
             <button
               key={s}
               onClick={() => setSort(s)}
-              className={`px-2.5 py-1 rounded-lg border transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg border transition-all whitespace-nowrap ${
                 sort === s
                   ? "bg-sky-500/10 text-sky-300 border-sky-500/25"
                   : "text-slate-500 border-slate-700/40 hover:text-slate-300 hover:border-slate-600/40"
@@ -375,13 +375,13 @@ export default function HubPage() {
         </div>
 
         {/* Intent filter */}
-        <div className="flex items-center gap-1.5 text-xs ml-auto">
-          <span className="text-slate-500">Intent:</span>
+        <div className="flex items-center gap-1.5 text-xs sm:ml-auto overflow-x-auto scrollbar-none">
+          <span className="text-slate-500 shrink-0">Intent:</span>
           {(["all", "business", "job", "partnership"] as IntentFilter[]).map((v) => (
             <button
               key={v}
               onClick={() => setIntentFilter(v)}
-              className={`px-2.5 py-1 rounded-lg border capitalize transition-all ${
+              className={`px-2.5 py-1.5 rounded-lg border capitalize transition-all whitespace-nowrap ${
                 intentFilter === v
                   ? "bg-sky-500/10 text-sky-300 border-sky-500/25"
                   : "text-slate-500 border-slate-700/40 hover:text-slate-300 hover:border-slate-600/40"

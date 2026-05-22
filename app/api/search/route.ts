@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       // Run searchers
       const rawResults = await runAllSearchers(prompt, filters || {})
 
-      // Save results
+      // Save results — merge top-level linkedinUrl into rawData for storage
       await prisma.result.createMany({
         data: rawResults.map(r => ({
           searchId: search.id,
@@ -76,7 +76,11 @@ export async function POST(req: NextRequest) {
           country: r.country,
           source: r.source,
           sourceUrl: r.sourceUrl,
-          rawData: r.rawData || {},
+          rawData: {
+            ...(r.rawData || {}),
+            // Preserve LinkedIn URL from searchers that populate it at top level
+            ...(r.linkedinUrl ? { linkedinUrl: r.linkedinUrl } : {}),
+          },
           matchScore: 0,
         }))
       })

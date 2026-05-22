@@ -128,6 +128,29 @@ export async function enrichResult(resultId: string) {
   // Accumulate ALL emails across all sources — scored + deduped at end
   const allEmails: Array<{ email: string; source: 'json_ld' | 'mailto' | 'hunter' | 'regex' }> = []
 
+  // Named contacts seeded from searchers (Apollo pre-populates these)
+  const seededContacts: Array<{
+    name: string
+    title?: string
+    email?: string
+    linkedin?: string
+    isPrimary: boolean
+  }> = []
+
+  // ── 0. Seed contacts from Apollo rawData (already have structured data) ────
+  const raw = result.rawData as Record<string, any> | null
+  if (raw?.apolloContacts?.length) {
+    for (const c of raw.apolloContacts) {
+      if (!c.name) continue
+      seededContacts.push({
+        name: c.name,
+        title: c.title,
+        linkedin: c.linkedinUrl,
+        isPrimary: false,
+      })
+    }
+  }
+
   // Named contacts from Hunter (we keep metadata separate)
   const hunterContacts: Array<{
     name: string
@@ -210,16 +233,26 @@ export async function enrichResult(resultId: string) {
     isPrimary: boolean
   }> = []
 
-  // Hunter contacts carry real names/titles — add them
-  for (const c of hunterContacts) {
-    newContacts.push({ ...c, isPrimary: c.email === email })
+  // Apollo seeded contacts (LinkedIn POCs) — add first if not already saved
+  for (const c of seededContacts) {
+    const alreadySaved = result.contacts.some(
+      (rc) => rc.name === c.name || (c.linkedin && rc.linkedin === c.linkedin)
+    )
+    if (!alreadySaved) newContacts.push({ ...c, isPrimary: false })
   }
 
-  // Remaining top emails not already covered by Hunter contacts
+  // Hunter contacts carry real names + titles — add them
+  for (const c of hunterContacts) {
+    const alreadyAdded = newContacts.some((nc) => nc.email === c.email && c.email)
+    if (!alreadyAdded) newContacts.push({ ...c, isPrimary: c.email === email })
+  }
+
+  // Remaining top emails not already covered
   for (const e of topEmails) {
     const inHunter = hunterContacts.some((c) => c.email === e)
     const inExisting = result.contacts.some((c) => c.email === e)
-    if (!inHunter && !inExisting) {
+    const inNew = newContacts.some((c) => c.email === e)
+    if (!inHunter && !inExisting && !inNew) {
       const scoreEntry = scored.find((s) => s.email === e)
       const sourceName = scoreEntry?.source ?? 'scraped'
       newContacts.push({

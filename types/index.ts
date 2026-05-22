@@ -21,6 +21,8 @@ export interface RawResult {
   country?: string;
   source: string;
   sourceUrl?: string;
+  /** LinkedIn company page URL — populated by Apollo / JSearch / LinkedIn searchers */
+  linkedinUrl?: string;
   rawData?: Record<string, any>;
 }
 

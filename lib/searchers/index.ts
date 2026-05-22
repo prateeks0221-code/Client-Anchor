@@ -1,45 +1,49 @@
 import { SerpapiSearcher } from './serpapi-searcher'
 import { GooglePlacesSearcher } from './google-places-searcher'
 import { AdzunaSearcher } from './adzuna-searcher'
+import { JSearchSearcher } from './jsearch-searcher'
+import { enrichWithApollo } from './apollo-searcher'
+import { resolveEntities } from '../entity-resolver'
 import { RawResult } from '@/types'
 
 const searchers = [
-  new SerpapiSearcher(),
-  new GooglePlacesSearcher(),
-  new AdzunaSearcher(),
+  new SerpapiSearcher(),         // web + Google Jobs engine
+  new GooglePlacesSearcher(),    // local physical businesses
+  new JSearchSearcher(),         // structured job data → employer extraction
+  new AdzunaSearcher(),          // job market → employer extraction
 ]
 
 export async function runAllSearchers(
   query: string,
   filters: any
 ): Promise<RawResult[]> {
+  // 1. Run all searchers in parallel
   const promises = searchers.map(s =>
     s.search(query, filters).catch(e => {
-      console.error(`${s.name} failed:`, e)
-      return []
+      console.error(`[${s.name}] failed:`, e instanceof Error ? e.message : String(e))
+      return [] as RawResult[]
     })
   )
 
-  const results = await Promise.allSettled(promises)
+  const settled = await Promise.allSettled(promises)
   const allResults: RawResult[] = []
 
-  results.forEach(r => {
+  settled.forEach((r, i) => {
     if (r.status === 'fulfilled') {
+      console.log(`[${searchers[i].name}] returned ${r.value.length} results`)
       allResults.push(...r.value)
     }
   })
 
-  // Deduplicate by name + website domain
-  const seen = new Map<string, RawResult>()
+  console.log(`[Searchers] ${allResults.length} raw results → entity resolution`)
 
-  allResults.forEach(r => {
-    const domain = r.website ? new URL(r.website).hostname : ''
-    const key = `${r.name}|${domain}`
+  // 2. Merge duplicates across sources
+  const resolved = resolveEntities(allResults)
 
-    if (!seen.has(key)) {
-      seen.set(key, r)
-    }
-  })
+  // 3. Apollo enrichment — adds LinkedIn, industry, employees to resolved entities
+  const enriched = await enrichWithApollo(resolved)
 
-  return Array.from(seen.values())
+  console.log(`[Searchers] ${enriched.length} final entities ready`)
+
+  return enriched
 }
